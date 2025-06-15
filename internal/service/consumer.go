@@ -14,7 +14,7 @@ import (
 	"github.com/number571/pure-dc-net/pkg/dc"
 )
 
-func ConsumeRequest(ctx context.Context, addr string, token *token.Token) error {
+func DoConsumeRequest(ctx context.Context, addr string, token *token.Token) error {
 	jsonRequest, _ := json.Marshal(token)
 	req, _ := http.NewRequestWithContext(
 		ctx,

@@ -5,9 +5,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
-      - SERVICE_PATH=test/node1
-      - CONSUME_ADDR=:8080
-      - PRODUCE_ADDR=:8081
+      - SERVICE_PATH=./test/node1
     ports:
       - 8081:8081
     networks:
@@ -17,8 +15,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
-      - SERVICE_PATH=test/node2
-      - CONSUME_ADDR=:8080
+      - SERVICE_PATH=./test/node2
     networks:
       - dc-network
   node3:
@@ -26,8 +23,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
-      - SERVICE_PATH=test/node3
-      - CONSUME_ADDR=:8080
+      - SERVICE_PATH=./test/node3
     networks:
       - dc-network
 networks:

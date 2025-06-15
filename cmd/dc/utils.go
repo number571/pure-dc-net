@@ -9,6 +9,12 @@ import (
 	"github.com/number571/pure-dc-net/internal/nodes"
 )
 
+const (
+	dcIterFile = "dc_iter.txt"
+	dcKeysFile = "dc_keys.txt"
+	dcNameFile = "dc_name.txt"
+)
+
 func storeDCIter(iter uint64) {
 	filename := filepath.Join(servicePath, dcIterFile)
 	err := os.WriteFile(filename, []byte(strconv.FormatUint(iter, 10)), 0600)
@@ -49,10 +55,13 @@ func loadDCNodesMap() nodes.Nodes {
 	result := make(nodes.Nodes, len(mapping))
 	for _, m := range mapping {
 		r := bytes.Split(m, []byte(";"))
-		if len(r) != 3 {
+		if len(r) < 3 {
 			panic("invalid mapping")
 		}
-		result[string(r[0])] = &nodes.NodeConn{Addr: string(r[1]), Key: r[2]}
+		result[string(r[0])] = &nodes.NodeConn{
+			Addr: string(r[1]),
+			Key:  bytes.Join(r[2:], []byte{}),
+		}
 	}
 	return result
 }

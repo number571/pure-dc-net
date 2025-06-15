@@ -60,21 +60,21 @@ func runGenerator(ctx context.Context, dcNet dc.IDCNet, ttlzr dc.ITotalizer, bqu
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			b := byte(0)
+			b := dcNet.Generate()
 			select {
 			case x := <-bqueue:
-				b = x
+				b ^= x // send message
 			default:
 			}
-			gb := b ^ dcNet.Generate()
-			doDCRequest(ctx, dcNet, nodesMap, nodeName, gb)
+			doRequest(ctx, dcNet, nodesMap, nodeName, b)
+			storeDCIter(dcNet.Iteration())
 			for {
 				if ttlzr.Size() == len(nodesMap) {
 					break
 				}
 				time.Sleep(time.Second)
 			}
-			ttlzr.Store(gb)
+			ttlzr.Store(b)
 			if r := ttlzr.Sum(); r != 0 {
 				log.Println(string(r))
 			}
@@ -82,13 +82,11 @@ func runGenerator(ctx context.Context, dcNet dc.IDCNet, ttlzr dc.ITotalizer, bqu
 	}
 }
 
-func doDCRequest(ctx context.Context, dcNet dc.IDCNet, nodes nodes.Nodes, nname string, gb byte) {
-	defer func() { storeDCIter(dcNet.Iteration()) }()
-
+func doRequest(ctx context.Context, dcNet dc.IDCNet, nodes nodes.Nodes, name string, b byte) {
 	tokenData := token.MarshalTokenData(&token.TokenData{
-		Name: nname,
+		Name: name,
 		Iter: dcNet.Iteration(),
-		Byte: gb,
+		Byte: b,
 	})
 
 	wg := &sync.WaitGroup{}
@@ -100,7 +98,7 @@ func doDCRequest(ctx context.Context, dcNet dc.IDCNet, nodes nodes.Nodes, nname 
 			defer wg.Done()
 
 			token := token.GenerateToken(node.Key, tokenData)
-			_ = service.ConsumeRequest(ctx, node.Addr, token)
+			_ = service.DoConsumeRequest(ctx, node.Addr, token)
 		}()
 	}
 
