@@ -17,9 +17,10 @@ func TestDCNetGenerate(t *testing.T) {
 	node2 := NewDCNet(0, g12, g23)
 	node3 := NewDCNet(0, g23, g31)
 
+	totalizer := NewTotalizer()
 	for range 100 {
-		result := node1.Generate() ^ node2.Generate() ^ node3.Generate()
-		if result != 0 {
+		totalizer.Store(node1.Generate(), node2.Generate(), node3.Generate())
+		if totalizer.Sum() != 0 {
 			t.Error("generate failed without msg")
 			break
 		}
@@ -27,8 +28,8 @@ func TestDCNetGenerate(t *testing.T) {
 
 	msg := byte(0x71)
 	for range 100 {
-		result := (msg ^ node1.Generate()) ^ node2.Generate() ^ node3.Generate()
-		if result != msg {
+		totalizer.Store(node1.Generate(), node2.Generate(), node3.Generate())
+		if msg^totalizer.Sum() != msg {
 			t.Error("generate failed with msg")
 			break
 		}

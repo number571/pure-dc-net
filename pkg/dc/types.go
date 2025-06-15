@@ -8,3 +8,9 @@ type IDCNet interface {
 type IGenerator interface {
 	Generate(uint64) byte
 }
+
+type ITotalizer interface {
+	Store(...byte)
+	Size() int
+	Sum() byte
+}

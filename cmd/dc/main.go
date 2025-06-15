@@ -1,152 +1,108 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"log"
-	"net/http"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/number571/pure-dc-net/internal/nodes"
+	"github.com/number571/pure-dc-net/internal/service"
+	"github.com/number571/pure-dc-net/internal/token"
 	"github.com/number571/pure-dc-net/pkg/dc"
-	"github.com/number571/pure-dc-net/pkg/syncmap"
+)
+
+var (
+	servicePath = os.Getenv("SERVICE_PATH")
+	consumeAddr = os.Getenv("CONSUME_ADDR")
+	produceAddr = os.Getenv("PRODUCE_ADDR")
+)
+
+var (
+	currIter = loadDCIter()
+	nodeName = loadDCName()
+	nodesMap = loadDCNodesMap()
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	myAddr := loadDCAddr(dcAddrFile)
-	keys := loadDCKeys(dcKeysFile)
-	dcNet := dc.NewDCNet(
-		loadDCIter(dcIterFile),
-		keysToGenerators(keys)...,
+	var (
+		dcNet  = dc.NewDCNet(currIter, nodes.NodesKeysToGenerators(nodesMap)...)
+		ttlzr  = dc.NewTotalizer()
+		bqueue = make(chan byte, 512)
 	)
 
-	result := syncmap.NewSyncMap()
-	bqueue := make(chan byte, 512)
+	log.Println("service is listening...")
+
+	go runGenerator(ctx, dcNet, ttlzr, bqueue)
 
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				reader := bufio.NewReader(os.Stdin)
-				text, _ := reader.ReadString('\n')
-				btext := []byte(text)
-				for _, b := range btext {
-					bqueue <- b
-				}
-			}
+		server := service.NewDCProducerServer(produceAddr, bqueue)
+		if err := server.ListenAndServe(); err != nil {
+			log.Println(err)
 		}
 	}()
 
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				b := byte(0)
-				select {
-				case x := <-bqueue:
-					b = x
-				default:
-				}
-				doDCRequest(dcNet, keys, myAddr, b)
-				for {
-					if result.Size() == len(keys) {
-						break
-					}
-					time.Sleep(time.Second)
-				}
-				if r := result.Sum(); r != 0 {
-					fmt.Print(string(r))
-				}
-				result.Clear()
-			}
-		}
-	}()
-
-	http.HandleFunc("/push", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		req := &dcRequest{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if err := validateMAC(keys, req.ReqToken); err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		if req.Iteration != dcNet.Iteration() {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-
-		if result.Size() == len(keys) {
-			w.WriteHeader(http.StatusLengthRequired)
-			return
-		}
-
-		result.Store(req.ReqToken.Addr, req.Generated)
-	})
-
-	if err := http.ListenAndServe(myAddr, nil); err != nil {
+	server := service.NewDCConsumerServer(consumeAddr, nodesMap, dcNet, ttlzr)
+	if err := server.ListenAndServe(); err != nil {
 		log.Println(err)
 	}
 }
 
-func doDCRequest(dcNet dc.IDCNet, keys map[string][]byte, myAddr string, b byte) {
-	var (
-		generated = b ^ dcNet.Generate()
-		iteration = dcNet.Iteration()
-	)
-	dcRequest := &dcRequest{
-		Iteration: iteration,
-		Generated: generated,
-	}
-	for addr := range keys {
-		dcRequest.ReqToken = generateToken(keys, myAddr, addr)
-		jsonRequest, _ := json.Marshal(dcRequest)
-		req, _ := http.NewRequest(
-			http.MethodPost,
-			fmt.Sprintf("http://%s/push", addr),
-			bytes.NewBuffer(jsonRequest),
-		)
-		for {
-			if err := doHTTPRequest(req); err != nil {
-				time.Sleep(time.Second)
-				continue
+func runGenerator(ctx context.Context, dcNet dc.IDCNet, ttlzr dc.ITotalizer, bqueue chan byte) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			b := byte(0)
+			select {
+			case x := <-bqueue:
+				b = x
+			default:
 			}
-			break
+			gb := b ^ dcNet.Generate()
+			doDCRequest(ctx, dcNet, nodesMap, nodeName, gb)
+			for {
+				if ttlzr.Size() == len(nodesMap) {
+					break
+				}
+				time.Sleep(time.Second)
+			}
+			ttlzr.Store(gb)
+			if r := ttlzr.Sum(); r != 0 {
+				log.Println(string(r))
+			}
 		}
 	}
-	storeDCIter(dcIterFile, iteration)
 }
 
-func doHTTPRequest(req *http.Request) error {
-	httpClient := &http.Client{Timeout: 5 * time.Second}
-	rsp, err := httpClient.Do(req)
-	if err != nil {
-		return err
+func doDCRequest(ctx context.Context, dcNet dc.IDCNet, nodes nodes.Nodes, nname string, gb byte) {
+	defer func() { storeDCIter(dcNet.Iteration()) }()
+
+	tokenData := token.MarshalTokenData(&token.TokenData{
+		Name: nname,
+		Iter: dcNet.Iteration(),
+		Byte: gb,
+	})
+
+	wg := &sync.WaitGroup{}
+	wg.Add(len(nodes))
+
+	for _, node := range nodes {
+		node := node
+		go func() {
+			defer wg.Done()
+
+			token := token.GenerateToken(node.Key, tokenData)
+			_ = service.ConsumeRequest(ctx, node.Addr, token)
+		}()
 	}
-	defer rsp.Body.Close()
-	if rsp.StatusCode != http.StatusOK {
-		return errors.New("bad status code")
-	}
-	return nil
+
+	wg.Wait()
 }

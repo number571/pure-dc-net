@@ -2,69 +2,23 @@ package main
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha512"
-	"errors"
-	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
-	"github.com/number571/pure-dc-net/pkg/dc"
+	"github.com/number571/pure-dc-net/internal/nodes"
 )
 
-func sumGenerated(gb map[string]byte) byte {
-	s := byte(0)
-	for _, b := range gb {
-		s ^= b
-	}
-	return s
-}
-
-func generateToken(keys map[string][]byte, myAddr, dstAddr string) *reqToken {
-	salt := make([]byte, 32)
-	return &reqToken{
-		Addr: myAddr,
-		Salt: salt,
-		Mac:  hmac.New(sha512.New, keys[dstAddr]).Sum(salt),
-	}
-}
-
-func validateMAC(keys map[string][]byte, token *reqToken) error {
-	key, ok := keys[token.Addr]
-	if !ok {
-		return errors.New("unknown address")
-	}
-	vmac := hmac.New(sha512.New, key).Sum(token.Salt)
-	if !bytes.Equal(token.Mac, vmac) {
-		return errors.New("invalid mac")
-	}
-	return nil
-}
-
-func keysToGenerators(keys map[string][]byte) []dc.IGenerator {
-	generators := make([]dc.IGenerator, 0, len(keys))
-	for _, k := range keys {
-		generators = append(generators, dc.NewHGenerator(k))
-	}
-	return generators
-}
-
-func storeDCIter(filename string, iter uint64) {
+func storeDCIter(iter uint64) {
+	filename := filepath.Join(servicePath, dcIterFile)
 	err := os.WriteFile(filename, []byte(strconv.FormatUint(iter, 10)), 0600)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func loadDCAddr(filename string) string {
-	body, err := os.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	return string(body)
-}
-
-func loadDCIter(filename string) uint64 {
+func loadDCIter() uint64 {
+	filename := filepath.Join(servicePath, dcIterFile)
 	body, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
@@ -76,20 +30,29 @@ func loadDCIter(filename string) uint64 {
 	return iter
 }
 
-func loadDCKeys(filename string) map[string][]byte {
+func loadDCName() string {
+	filename := filepath.Join(servicePath, dcNameFile)
+	body, err := os.ReadFile(filename)
+	if err != nil {
+		panic(err)
+	}
+	return string(body)
+}
+
+func loadDCNodesMap() nodes.Nodes {
+	filename := filepath.Join(servicePath, dcKeysFile)
 	body, err := os.ReadFile(filename)
 	if err != nil {
 		panic(err)
 	}
 	mapping := bytes.Split(body, []byte("\n"))
-	result := make(map[string][]byte, len(mapping))
+	result := make(nodes.Nodes, len(mapping))
 	for _, m := range mapping {
 		r := bytes.Split(m, []byte(";"))
-		if len(r) != 2 {
-			fmt.Println(string(m))
+		if len(r) != 3 {
 			panic("invalid mapping")
 		}
-		result[string(r[0])] = r[1]
+		result[string(r[0])] = &nodes.NodeConn{Addr: string(r[1]), Key: r[2]}
 	}
 	return result
 }
