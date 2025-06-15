@@ -60,7 +60,7 @@ func loadDCNodesMap() nodes.Nodes {
 		}
 		result[string(r[0])] = &nodes.NodeConn{
 			Addr: string(r[1]),
-			Key:  bytes.Join(r[2:], []byte{}),
+			SKey: bytes.Join(r[2:], []byte{}),
 		}
 	}
 	return result

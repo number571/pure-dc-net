@@ -79,7 +79,7 @@ func handleConsumer(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer)
 			return
 		}
 
-		if err := token.ValidateMAC(node.Key, reqToken); err != nil {
+		if err := token.ValidateMAC(node.SKey, reqToken); err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

@@ -4,5 +4,5 @@ type Nodes map[string]*NodeConn
 
 type NodeConn struct {
 	Addr string
-	Key  []byte
+	SKey []byte
 }

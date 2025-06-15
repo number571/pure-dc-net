@@ -97,7 +97,7 @@ func doRequest(ctx context.Context, dcNet dc.IDCNet, nodes nodes.Nodes, name str
 		go func() {
 			defer wg.Done()
 
-			token := token.GenerateToken(node.Key, tokenData)
+			token := token.GenerateToken(node.SKey, tokenData)
 			_ = service.DoConsumeRequest(ctx, node.Addr, token)
 		}()
 	}
