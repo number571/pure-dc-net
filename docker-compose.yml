@@ -5,6 +5,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
+      - SERVICE_NAME=node1
       - SERVICE_PATH=./test/node1
     ports:
       - 8081:8081
@@ -15,6 +16,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
+      - SERVICE_NAME=node2
       - SERVICE_PATH=./test/node2
     networks:
       - dc-network
@@ -23,6 +25,7 @@ services:
       context: ./
       dockerfile: cmd/dc/Dockerfile
     environment:
+      - SERVICE_NAME=node3
       - SERVICE_PATH=./test/node3
     networks:
       - dc-network

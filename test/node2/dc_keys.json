@@ -1,0 +1,10 @@
+{
+    "node1": {
+        "addr": "node1:8080",
+        "pasw": "secret-key-1-2"
+    },
+    "node3": {
+        "addr": "node3:8080",
+        "pasw": "secret-key-2-3"
+    }
+}

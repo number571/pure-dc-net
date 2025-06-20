@@ -10,6 +10,7 @@ COPY ./ ./
 RUN go build -o dc ./cmd/dc
 
 ENV SERVICE_PATH="."
+ENV SERVICE_NAME="_"
 ENV CONSUME_ADDR=":8080"
 ENV PRODUCE_ADDR=":8081"
 CMD ./dc 

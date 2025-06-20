@@ -1,2 +1,0 @@
-node1;node1:8080;secret-key-1-2
-node3;node3:8080;secret-key-2-3

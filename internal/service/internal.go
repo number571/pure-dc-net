@@ -5,13 +5,13 @@ import (
 	"net/http"
 )
 
-func NewDCProducerServer(addr string, bqueue chan byte) *http.Server {
+func NewDCInternalServer(addr string, bqueue chan byte) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/dc/produce", handleProducer(bqueue))
+	mux.HandleFunc("/dc", handleInternal(bqueue))
 	return &http.Server{Handler: mux, Addr: addr}
 }
 
-func handleProducer(bqueue chan byte) HandleFunc {
+func handleInternal(bqueue chan byte) HandleFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)

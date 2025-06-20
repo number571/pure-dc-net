@@ -4,4 +4,4 @@ run:
 	docker-compose build
 	docker-compose up
 request:
-	curl -X POST http://localhost:8081/dc/produce --data 'world'
+	curl -X POST http://localhost:8081/dc --data 'world'

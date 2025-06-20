@@ -13,7 +13,7 @@ type Token struct {
 	Mac  []byte `json:"mac"`
 }
 
-func GenerateToken(key []byte, data []byte) *Token {
+func GenerateToken(key, data []byte) *Token {
 	salt := make([]byte, 32)
 	return &Token{
 		Salt: salt,

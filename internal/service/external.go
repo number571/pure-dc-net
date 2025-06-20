@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/number571/pure-dc-net/internal/nodes"
@@ -14,12 +15,29 @@ import (
 	"github.com/number571/pure-dc-net/pkg/dc"
 )
 
-func DoConsumeRequest(ctx context.Context, addr string, token *token.Token) error {
+func DoRequest(ctx context.Context, nodes nodes.Nodes, tokenData []byte) {
+	wg := &sync.WaitGroup{}
+	wg.Add(len(nodes))
+
+	for _, node := range nodes {
+		node := node
+		go func() {
+			defer wg.Done()
+
+			token := token.GenerateToken([]byte(node.Pasw), tokenData)
+			_ = doExternalRequest(ctx, node.Addr, token)
+		}()
+	}
+
+	wg.Wait()
+}
+
+func doExternalRequest(ctx context.Context, addr string, token *token.Token) error {
 	jsonRequest, _ := json.Marshal(token)
 	req, _ := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("http://%s/dc/consume", addr),
+		fmt.Sprintf("http://%s/dc", addr),
 		bytes.NewBuffer(jsonRequest),
 	)
 	for {
@@ -48,13 +66,13 @@ func doHTTPRequest(req *http.Request) error {
 	return nil
 }
 
-func NewDCConsumerServer(addr string, nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) *http.Server {
+func NewDCExternalServer(addr string, nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/dc/consume", handleConsumer(nodes, dcNet, totalizer))
+	mux.HandleFunc("/dc", handleExternal(nodes, dcNet, totalizer))
 	return &http.Server{Handler: mux, Addr: addr}
 }
 
-func handleConsumer(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) HandleFunc {
+func handleExternal(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) HandleFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -79,7 +97,7 @@ func handleConsumer(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer)
 			return
 		}
 
-		if err := token.ValidateMAC(node.SKey, reqToken); err != nil {
+		if err := token.ValidateMAC([]byte(node.Pasw), reqToken); err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -96,5 +114,4 @@ func handleConsumer(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer)
 
 		totalizer.Store(tokenData.Byte)
 	}
-
 }
