@@ -1,7 +1,8 @@
-.PHONY: default run request
+M=world
+.PHONY: default run req
 default: run 
 run:
 	docker-compose build
 	docker-compose up
-request:
-	curl -X POST http://localhost:8081/dc --data 'world'
+req:
+	curl -X POST 'http://localhost:8081/dc' --data '$(M)'

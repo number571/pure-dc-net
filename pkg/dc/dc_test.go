@@ -13,9 +13,9 @@ func TestDCNetGenerate(t *testing.T) {
 		g31 = NewHGenerator([]byte("secret-key-3"))
 	)
 
-	node1 := NewDCNet(0, g12, g31)
-	node2 := NewDCNet(0, g12, g23)
-	node3 := NewDCNet(0, g23, g31)
+	node1 := NewDCState(0, g12, g31)
+	node2 := NewDCState(0, g12, g23)
+	node3 := NewDCState(0, g23, g31)
 
 	totalizer := NewTotalizer()
 	for range 100 {
@@ -28,8 +28,8 @@ func TestDCNetGenerate(t *testing.T) {
 
 	msg := byte(0x71)
 	for range 100 {
-		totalizer.Store(node1.Generate(), node2.Generate(), node3.Generate())
-		if msg^totalizer.Sum() != msg {
+		totalizer.Store(msg^node1.Generate(), node2.Generate(), node3.Generate())
+		if totalizer.Sum() != msg {
 			t.Error("generate failed with msg")
 			break
 		}

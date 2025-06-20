@@ -1,6 +1,6 @@
 package dc
 
-type IDCNet interface {
+type IDCState interface {
 	Iteration() uint64
 	Generate() byte
 }

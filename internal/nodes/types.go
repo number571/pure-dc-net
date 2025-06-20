@@ -1,8 +1,9 @@
 package nodes
 
-type Nodes map[string]*NodeConn
+type NodesMap map[string]INodeConn
 
-type NodeConn struct {
-	Addr string `json:"addr"`
-	Pasw string `json:"pasw"`
+type INodeConn interface {
+	GetAddress() string
+	GetAuthKey() []byte
+	GetEncrKey() []byte
 }

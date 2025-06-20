@@ -15,7 +15,9 @@ import (
 	"github.com/number571/pure-dc-net/pkg/dc"
 )
 
-func DoRequest(ctx context.Context, nodes nodes.Nodes, tokenData []byte) {
+func Commit(ctx context.Context, nodes nodes.NodesMap, tkd *token.TokenData) {
+	tokenData := token.MarshalTokenData(tkd)
+
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodes))
 
@@ -23,9 +25,8 @@ func DoRequest(ctx context.Context, nodes nodes.Nodes, tokenData []byte) {
 		node := node
 		go func() {
 			defer wg.Done()
-
-			token := token.GenerateToken([]byte(node.Pasw), tokenData)
-			_ = doExternalRequest(ctx, node.Addr, token)
+			token := token.GenerateToken(node.GetAuthKey(), tokenData)
+			_ = doExternalRequest(ctx, node.GetAddress(), token)
 		}()
 	}
 
@@ -66,13 +67,13 @@ func doHTTPRequest(req *http.Request) error {
 	return nil
 }
 
-func NewDCExternalServer(addr string, nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) *http.Server {
+func NewDCExternalServer(addr string, nodes nodes.NodesMap, dcState dc.IDCState, totalizer dc.ITotalizer) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/dc", handleExternal(nodes, dcNet, totalizer))
+	mux.HandleFunc("/dc", handleExternal(nodes, dcState, totalizer))
 	return &http.Server{Handler: mux, Addr: addr}
 }
 
-func handleExternal(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer) HandleFunc {
+func handleExternal(nodes nodes.NodesMap, dcState dc.IDCState, totalizer dc.ITotalizer) HandleFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -97,12 +98,12 @@ func handleExternal(nodes nodes.Nodes, dcNet dc.IDCNet, totalizer dc.ITotalizer)
 			return
 		}
 
-		if err := token.ValidateMAC([]byte(node.Pasw), reqToken); err != nil {
+		if err := token.ValidateMAC(node.GetAuthKey(), reqToken); err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		if tokenData.Iter != dcNet.Iteration() {
+		if tokenData.Iter != dcState.Iteration() {
 			w.WriteHeader(http.StatusConflict)
 			return
 		}
